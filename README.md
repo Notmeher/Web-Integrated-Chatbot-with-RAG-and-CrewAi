@@ -91,13 +91,6 @@ The GenZMarketing Chatbot project is a sophisticated solution designed to levera
 
 Sample questions for testing can be found in `QA.txt`. These include queries about GenZMarketing's services, contact information, and blog content.
 
-## Future Enhancements
-
-- Add more robust error handling.
-- Integrate additional data sources for enhanced chatbot responses.
-- Deploy the application on a cloud platform for public accessibility.
-
-
 
 ## License
 
