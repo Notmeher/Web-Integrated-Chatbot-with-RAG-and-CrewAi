@@ -57,7 +57,7 @@ def create_vector_database(json_file_path):
 
 def setup_retriever(vector_database):
     """Setup a retriever using the vector database."""
-    return vector_database.as_retriever(search_kwargs={"k": 3})
+    return vector_database.as_retriever(search_kwargs={"k": 3})  # Fetch top 3 documents
 
 def build_chatbot(retriever):
     """Build a chatbot using OpenAI's GPT model."""
@@ -67,4 +67,19 @@ def build_chatbot(retriever):
 
     llm = ChatOpenAI(model="gpt-4", openai_api_key=openai_api_key)
     qa_chain = RetrievalQA.from_chain_type(llm=llm, chain_type="stuff", retriever=retriever)
-    return qa_chain
+    
+    # Define a function that answers a query with sources
+    def answer_with_sources(query):
+        response = qa_chain.run(query)
+        documents = retriever.get_relevant_documents(query)
+
+        # Extract URLs from metadata and ensure only one unique URL is included
+        all_urls = [doc.metadata.get("url", "No URL provided") for doc in documents]
+        unique_url = next(iter(all_urls), "No URL provided")  # Get the first unique URL
+
+        return {
+            "result": response,   # Return the response from the QA chain
+            "sources": [unique_url],  # Include the URL in the response
+        }
+
+    return answer_with_sources
