@@ -1,46 +1,74 @@
+import asyncio
 import streamlit as st
 from crew import crew_workflow
 
-st.title("GenZMarketing Chatbot")
+# Initialize session state for chat history
+if "messages" not in st.session_state:
+    st.session_state["messages"] = []
 
-# Initialize session state to store past queries and responses
-if "chat_history" not in st.session_state:
-    st.session_state["chat_history"] = []
+def display_message(role, content):
+    """Display a message in the chat interface based on its role."""
+    if role == "user":
+        with st.chat_message("user"):
+            st.markdown(content)
+    elif role == "assistant":
+        with st.chat_message("assistant"):
+            st.markdown(content)
+    elif role == "system":
+        with st.chat_message("system"):
+            st.markdown(f"**System**: {content}")
 
-# Input query
-query = st.text_input("Enter your question:")
+async def run_workflow_with_streaming(query):
+    """Run the chatbot workflow with streaming text responses."""
+    # Append the user's query to the chat history
+    st.session_state["messages"].append({"role": "user", "content": query})
 
-if st.button("Start Analysis and Ask"):
-    if query:
-        # Get the result from the workflow
-        result = crew_workflow(query)
+    # Display the user's query in the chat UI
+    display_message("user", query)
 
-        if "error" in result:
-            st.error(result["error"])
-        else:
-            response = result["response"]
-            sources = result.get("sources", [])
+    # Placeholder for the assistant's response
+    message_placeholder = st.empty()
+    partial_response = ""
 
-            # Append the new query and response to the chat history
-            st.session_state["chat_history"].append({
-                "question": query,
-                "response": response,
-                "sources": sources,
-            })
+    # Simulate streaming by breaking the response into chunks
+    result = crew_workflow(query)
 
-            st.success("Query answered successfully!")
-    else:
-        st.error("Please provide a question.")
+    if "error" in result:
+        st.error(result["error"])
+        return
 
-# Display chat history
-st.write("## Chat History")
-for chat in st.session_state["chat_history"]:
-    st.write(f"**Question:** {chat['question']}")
-    st.write(f"**Answer:** {chat['response']}")
-    if chat["sources"]:
-        st.write("**Sources:**")
-        for source in chat["sources"]:
-            st.write(f"- {source}")
-    else:
-        st.write("No sources found.")
-    st.write("---")  # Divider between chats
+    response = result.get("response", "")
+    sources = result.get("sources", [])
+
+    for chunk in response.split():
+        await asyncio.sleep(0.1)  # Simulate streaming delay
+        partial_response += f"{chunk} "
+        message_placeholder.markdown(partial_response)
+
+    # Finalize the response
+    message_placeholder.markdown(partial_response)
+
+    # Append the assistant's response to the chat history
+    st.session_state["messages"].append({"role": "assistant", "content": partial_response})
+
+    # Optionally display sources
+    if sources:
+        source_text = "\n".join([f"- {source}" for source in sources])
+        st.session_state["messages"].append({"role": "system", "content": f"Sources:\n{source_text}"})
+
+async def main():
+    st.title("GenZMarketing Chatbot")
+    st.write("Ask questions and receive responses about marketing with GenZ insights!")
+
+    # Display chat history
+    for message in st.session_state["messages"]:
+        display_message(message["role"], message["content"])
+
+    # User input
+    user_query = st.chat_input("What is your question?")
+
+    if user_query:
+        await run_workflow_with_streaming(user_query)
+
+if __name__ == "__main__":
+    asyncio.run(main())
