@@ -1,13 +1,12 @@
 import os
 import json
-import requests
-from bs4 import BeautifulSoup
-from langchain_community.vectorstores import Chroma
-from langchain_community.embeddings import OllamaEmbeddings
-from langchain_community.llms import Ollama
+from langchain.vectorstores import Chroma
+from langchain.embeddings.openai import OpenAIEmbeddings
+from langchain.chat_models import ChatOpenAI
 from langchain.text_splitter import CharacterTextSplitter
 from langchain.docstore.document import Document
 from langchain.chains import RetrievalQA
+from googleapiclient.discovery import build
 import hashlib
 
 def compute_file_hash(file_path):
@@ -18,30 +17,13 @@ def compute_file_hash(file_path):
         hasher.update(buf)
     return hasher.hexdigest()
 
-def scrape_all_websites(urls):
-    """Scrape multiple URLs and return a consolidated list of data."""
-    scraped_data = []
-    for url in urls:
-        try:
-            response = requests.get(url)
-            soup = BeautifulSoup(response.text, 'html.parser')
-            title = soup.title.string.strip() if soup.title else "No Title Found"
-            content = ' '.join(soup.stripped_strings)
-            scraped_data.append({"title": title, "url": url, "content": content})
-        except Exception as e:
-            raise ValueError(f"Error scraping {url}: {str(e)}")
-    return scraped_data
-
-def save_to_json(data):
-    """Save scraped data to a JSON file."""
-    file_name = "website_data.json"
-    with open(file_name, "w", encoding="utf-8") as f:
-        json.dump(data, f, indent=4)
-    return file_name
-
 def create_vector_database(json_file_path):
-    """Create a vector database using ChromaDB with Ollama embeddings."""
-    ollama_embeddings = OllamaEmbeddings(model="llama3.2")
+    """Create a vector database using ChromaDB with `text-embedding-3-small`."""
+    openai_api_key = os.getenv("OPENAI_API_KEY")
+    if not openai_api_key:
+        raise ValueError("OpenAI API key not found. Please set it in your environment variables.")
+
+    openai_embeddings = OpenAIEmbeddings(model="text-embedding-3-small", openai_api_key=openai_api_key)
     persist_directory = "db"
 
     if os.path.exists(persist_directory) and os.path.exists(json_file_path):
@@ -52,7 +34,7 @@ def create_vector_database(json_file_path):
                 existing_hash = f.read()
             if existing_hash == new_hash:
                 print("No changes detected in data. Using existing embeddings.")
-                return Chroma(persist_directory=persist_directory, embedding_function=ollama_embeddings)
+                return Chroma(persist_directory=persist_directory, embedding_function=openai_embeddings)
 
     with open(json_file_path, "r", encoding="utf-8") as f:
         data = json.load(f)
@@ -64,7 +46,7 @@ def create_vector_database(json_file_path):
     text_splitter = CharacterTextSplitter(separator="\n", chunk_size=1000, chunk_overlap=40)
     docs = text_splitter.split_documents(documents)
 
-    vectordb = Chroma.from_documents(documents=docs, embedding=ollama_embeddings, persist_directory=persist_directory)
+    vectordb = Chroma.from_documents(documents=docs, embedding=openai_embeddings, persist_directory=persist_directory)
     vectordb.persist()
 
     new_hash = compute_file_hash(json_file_path)
@@ -78,7 +60,79 @@ def setup_retriever(vector_database):
     return vector_database.as_retriever(search_kwargs={"k": 3})
 
 def build_chatbot(retriever):
-    """Build a chatbot using Ollama LLM."""
-    llm = Ollama(model="llama3.2")
+    """Build a chatbot using OpenAI's GPT model."""
+    openai_api_key = os.getenv("OPENAI_API_KEY")
+    if not openai_api_key:
+        raise ValueError("OpenAI API key not found. Please set it in your environment variables.")
+
+    google_api_key = os.getenv("GOOGLE_API_KEY")
+    google_cse_id = os.getenv("GOOGLE_SEARCH_ENGINE_ID")
+    target_website = os.getenv("TARGET_WEBSITE")
+
+    def search_web(query, max_results=1):
+        """Perform web search to retrieve external knowledge."""
+        service = build("customsearch", "v1", developerKey=google_api_key)
+        results = service.cse().list(q=query, cx=google_cse_id, siteSearch=target_website, num=max_results).execute()
+        return results.get("items", [])
+
+    def refine_documents(documents, max_tokens=1500):
+        """Decompose, filter, and recompose documents into refined knowledge."""
+        refined_content = []
+        current_token_count = 0
+
+        for doc in documents:
+            # Decompose into smaller chunks
+            chunks = doc.page_content.split("\n")
+            # Filter relevant chunks
+            filtered_chunks = [chunk for chunk in chunks if len(chunk.strip()) > 20]
+
+            # Add chunks until max_tokens is reached
+            for chunk in filtered_chunks:
+                token_count = len(chunk.split())
+                if current_token_count + token_count > max_tokens:
+                    break
+                refined_content.append(chunk)
+                current_token_count += token_count
+
+        return "\n".join(refined_content)
+
+    llm = ChatOpenAI(model="gpt-4", openai_api_key=openai_api_key, max_tokens=500)  # Limit output tokens
     qa_chain = RetrievalQA.from_chain_type(llm=llm, chain_type="stuff", retriever=retriever)
-    return qa_chain
+
+    def answer_with_sources(query):
+        dynamic_prompt = (
+            "Respond dynamically based on the query intent. "
+            "Use a paragraph for general information and a list for enumerations. "
+            "Maintain a professional tone.\n\nQuery:"
+        )
+
+        # Step 1: Retrieve the top k documents
+        documents = retriever.get_relevant_documents(query)
+
+        # Step 2: Refine documents
+        refined_knowledge = refine_documents(documents, max_tokens=1500)
+
+        # Step 3: Fallback to web search if needed
+        if not refined_knowledge.strip():
+            web_results = search_web(query, max_results=1)
+            if web_results:
+                refined_knowledge = "\n".join(
+                    f"{item['title']}: {item['link']}" for item in web_results
+                )
+
+        # Step 4: Enforce strict token limit for input
+        total_input = f"{refined_knowledge}\n\n{dynamic_prompt}\n\n{query}"
+        if len(total_input.split()) > 4000:  # Strict input token cap
+            total_input = " ".join(total_input.split()[:4000])
+
+        # Step 5: Generate response
+        response = qa_chain.run(total_input)
+
+        source_url = documents[0].metadata.get("url", "No URL provided") if documents else "No URL provided"
+
+        return {
+            "result": response,
+            "sources": [source_url]  # Return only the top source URL
+        }
+
+    return answer_with_sources
