@@ -4,102 +4,148 @@
 
 ## Overview
 
-The GenZMarketing Chatbot project is a sophisticated solution designed to leverage a local Large Language Model (LLM) and Crew AI to provide tailored answers based on data scraped from the GenZMarketing website. This project demonstrates the power of natural language processing, vector databases, and custom retrieval mechanisms to deliver precise and dynamic responses.
+CrewAI is a sophisticated workflow built for processing, retrieving, and generating dynamic responses from a vast dataset. The system involves several agents working together to vectorize, retrieve, and create chatbot responses using OpenAI's GPT models and other integrated tools like Google Custom Search for external knowledge.
 
-## Features
+The CrewAI workflow is divided into several components, each focusing on a specific task, such as vectorization, retriever design, and chatbot implementation. The system is flexible and can be extended to accommodate more tasks and features as needed.
 
-- **Website Data Scraping**: Automatically scrapes content from multiple URLs of the GenZMarketing website.
-- **Vectorization**: Converts scraped data into vectorized form for efficient search and retrieval.
-- **Retriever Design**: Utilizes a retriever for searching relevant content based on user queries.
-- **Chatbot Integration**: Implements a chatbot using the Ollama LLM for generating user-focused responses.
-- **Streamlit UI**: User-friendly interface for entering queries and viewing results.
+---
 
-## Technologies Used
+## Workflow
 
-- **Programming Languages**: Python
-- **Frameworks and Libraries**:
-  - [LangChain](https://github.com/hwchase17/langchain)
-  - [Streamlit](https://streamlit.io/)
-  - [BeautifulSoup](https://www.crummy.com/software/BeautifulSoup/)
-  - [ChromaDB](https://www.trychroma.com/)
-  - [Ollama Embeddings and LLM](https://ollama.com/)
-- **Environment Variables**: Stored securely in a `.env` file.
+1. **Vectorization**: The data is vectorized and stored in a database using OpenAI embeddings.
+2. **Retriever Design**: A retriever is designed to search the vectorized data and refine the search results.
+3. **Chatbot Implementation**: A chatbot is created that dynamically adjusts its responses based on the query intent.
 
-## File Structure
+The system ensures that input is sanitized, validated, and signed for security, using cryptographic signatures for query verification.
 
-- `app.py`: Main application file for Streamlit UI.
-- `crew.py`: Workflow implementation to manage the sequence of scraping, vectorization, retrieval, and chatbot integration.
-- `tasks.py`: Definitions of individual tasks such as scraping, vectorization, retriever setup, and chatbot implementation.
-- `tools.py`: Utility functions for scraping, saving data, vector database creation, and more.
-- `agents.py`: Agent definitions for each stage of the process.
-- `requirements.txt`: List of dependencies.
-- `.env`: Environment configuration file (contains API keys and settings).
-- `data_hash.txt`: Hash to ensure data consistency during vectorization.
-- `website_data.json`: JSON file containing scraped data.
-- `QA.txt`: Sample questions for testing the chatbot.
+---
 
-## Setup Instructions
+## Components
+
+### 1. `agents.py`
+This file defines the different agents used in the workflow:
+
+- **Data Vectorizer Agent**: Responsible for vectorizing content and storing it in a vector database.
+- **Retriever Designer Agent**: Designs a retriever to search and refine vectorized data.
+- **Chatbot Agent**: Implements a chatbot that dynamically adjusts its responses based on user queries.
+
+### 2. `crew.py`
+This file defines the main workflow of the CrewAI system, using the agents to perform tasks like vectorization, retriever design, and chatbot response generation. The flow involves:
+
+- Generating a signed query.
+- Processing and sanitizing the input.
+- Passing the query through the steps of vectorization, retriever design, and chatbot implementation.
+
+### 3. `prompt_inject.py`
+This file contains utilities for handling and verifying signed prompts:
+
+- **Generate Signed Prompt**: Creates a cryptographic signature for the query to ensure its authenticity.
+- **Verify Signed Prompt**: Verifies the signature of the prompt.
+- **Sanitize and Validate Input**: Ensures input is free from harmful patterns and is within allowed length.
+
+### 4. `tasks.py`
+This file defines the tasks that the system performs:
+
+- **Vectorize Data**: Converts data into a vectorized format and stores it in a database.
+- **Design Retriever**: Creates a retriever using the vector database.
+- **Implement Chatbot**: Implements a chatbot using a retriever for dynamic responses.
+- **Format Responses**: Formats the response from the chatbot based on the query type (list or paragraph).
+
+### 5. `tools.py`
+This file defines the tools for creating a vector database and setting up the retriever and chatbot:
+
+- **Create Vector Database**: Uses OpenAI embeddings to create a vector database from a JSON file.
+- **Setup Retriever**: Configures a retriever to search the vectorized database.
+- **Build Chatbot**: Builds a chatbot using OpenAI's GPT model and integrates web search for external knowledge.
+
+---
+
+## Setup
 
 ### Prerequisites
 
-1. Python 3.8 or higher
-2. pip or another package manager
+- Python 3.x
+- OpenAI API Key
+- Google API Key (for web search)
+- Google Custom Search Engine ID
 
 ### Installation
 
 1. Clone the repository:
    ```bash
-   git clone <repository_url>
-   cd <repository_name>
+   git clone https://github.com/your-repository/crewai-workflow.git
+   cd crewai-workflow
    ```
 
-2. Install dependencies:
+2. Install the required dependencies:
    ```bash
    pip install -r requirements.txt
    ```
 
-3. Set up environment variables:
+3. Set up your environment variables:
    - Create a `.env` file in the root directory.
- 
-4. Run the Streamlit application:
+   - Add the following keys:
+     ```env
+     OPENAI_API_KEY=your_openai_api_key
+     GOOGLE_API_KEY=your_google_api_key
+     GOOGLE_SEARCH_ENGINE_ID=your_google_cse_id
+     SECRET_KEY=your_secret_key
+     ```
+
+4. Run the system:
    ```bash
-   streamlit run app.py
+   python crew.py
    ```
+
+---
 
 ## Usage
 
-1. Open the application in your browser (usually at `http://localhost:8501`).
-2. Enter a question in the input field.
-3. Click **Start Analysis and Ask**.
-4. View the response generated by the chatbot based on the scraped website data.
+Once the setup is complete, you can use the system to process queries. The `crew_workflow` function in `crew.py` takes a user query and processes it through the vectorization, retriever design, and chatbot implementation steps.
 
-## Key Components
+Example:
+```python
+from crew import crew_workflow
 
-### Scraping
-- URLs are specified in `crew.py` and processed using `BeautifulSoup`.
+query = "What is the significance of AI in modern education?"
+result = crew_workflow(query)
+print(result)
+```
 
-### Vectorization
-- Scraped data is vectorized using Ollama embeddings and stored in ChromaDB.
+This will return a structured response with the chatbot's answer and relevant sources.
 
-### Retrieval
-- A retriever fetches the most relevant content for a given query.
+---
 
-### Chatbot
-- Chatbot implementation uses Ollama LLM to provide a natural conversational experience.
+## Error Handling
 
-## Testing
+- **Input Errors**: If the input contains harmful patterns or exceeds the length limit, a `SanitizationError` is raised.
+- **Vectorization Errors**: If the vectorization step fails, an error message is returned.
+- **Retriever Errors**: If the retriever design step fails, an error message is returned.
+- **Chatbot Errors**: If the chatbot implementation fails, an error message is returned.
 
-Sample questions for testing can be found in `QA.txt`. These include queries about GenZMarketing's services, contact information, and blog content.
+---
 
+## Contributing
+
+We welcome contributions to enhance the functionality of CrewAI! Feel free to fork the repository, make improvements, and submit pull requests.
+
+---
 
 ## License
 
-This project is licensed under the MIT License. See `LICENSE` for more details.
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
 
-![result](https://github.com/user-attachments/assets/0954dd5e-112e-40e9-95b8-7ae56ef56ad4)
-![result4](https://github.com/user-attachments/assets/fed14c44-54c0-4462-b723-18c91c85b16f)
-![result5](https://github.com/user-attachments/assets/39443eba-6803-49e4-9240-fd1399e7a1ee)
-![result3](https://github.com/user-attachments/assets/f721092a-1ec3-4102-98d0-38ca6b67a2cd)
-![result2](https://github.com/user-attachments/assets/fa4b9bcc-ea48-480b-a60e-888e7e1763e3)
-![result1](https://github.com/user-attachments/assets/ec50acdd-8f00-4913-b14c-d7981581e930)
+---
+
+## Acknowledgments
+
+- OpenAI for providing powerful language models.
+- Google for the Custom Search API to retrieve external knowledge.
+
+---
+
+Feel free to ask any questions or raise issues via the GitHub issues page. Happy coding!
+[updated_result_v1.pdf](https://github.com/user-attachments/files/19142438/updated_result_v1.pdf)
+
+
 
