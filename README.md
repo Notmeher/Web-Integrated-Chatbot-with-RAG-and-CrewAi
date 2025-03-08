@@ -145,7 +145,9 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 ---
 
 Feel free to ask any questions or raise issues via the GitHub issues page. Happy coding!
-[updated_result_v1.pdf](https://github.com/user-attachments/files/19142438/updated_result_v1.pdf)
+![image](https://github.com/user-attachments/assets/6ae5acad-dd2c-466e-8ffe-1a31fb62fe98)
+![image](https://github.com/user-attachments/assets/45826c41-ce14-4217-8dc8-cb2bd169650c)
+
 
 
 
