@@ -1,43 +1,52 @@
 import os
 from dotenv import load_dotenv
-from tasks import scrape_data, vectorize_data, design_retriever, implement_chatbot
+from tasks import vectorize_data, design_retriever, implement_chatbot, format_responses
+from prompt_inject import process_input, generate_signed_prompt
 
 # Load environment variables
 load_dotenv()
 
-URLS = [
-    "https://genzmarketing.xyz/",
-    "https://genzmarketing.xyz/about_us",
-    "https://genzmarketing.xyz/services",
-    "https://genzmarketing.xyz/books",
-    "https://genzmarketing.xyz/packages",
-    "https://genzmarketing.xyz/blogs",
-    "https://genzmarketing.xyz/contact_us",
-]
+JSON_FILE_PATH = r"GENZMarketing.json"
+SECRET_KEY = os.getenv("SECRET_KEY")  # Add your secret key to the .env file
 
 def crew_workflow(query):
-    # Step 1: Scrape website data
-    scraping_result = scrape_data({"urls": URLS})
-    if "error" in scraping_result:
-        return {"error": scraping_result["error"]}
-    
-    json_data = scraping_result["json_data"]
+    try:
+        # Generate a signed version of the query
+        if SECRET_KEY:
+            query = generate_signed_prompt(query, SECRET_KEY)
 
-    # Step 2: Vectorize scraped data
-    vectorization_result = vectorize_data({"json_data": json_data})
+        # Process the input (sanitize, validate, check signed prompt)
+        query = process_input(query, secret_key=SECRET_KEY)
+    except ValueError as e:
+        # Return a specific error message
+        return {"error": str(e)}
+
+    # Step 1: Vectorize provided data
+    vectorization_result = vectorize_data({"json_file_path": JSON_FILE_PATH})
     if "error" in vectorization_result:
         return {"error": vectorization_result["error"]}
 
-    # Step 3: Design retriever
+    # Step 2: Design retriever with refinement
     retriever_result = design_retriever({"vector_database": vectorization_result["database"]})
     if "error" in retriever_result:
         return {"error": retriever_result["error"]}
 
-    # Step 4: Implement chatbot and answer the query
-    chatbot = implement_chatbot({"retriever": retriever_result["retriever"]})
-    if "error" in chatbot:
-        return {"error": chatbot["error"]}
+    # Step 3: Implement chatbot and answer the query
+    chatbot_result = implement_chatbot({"retriever": retriever_result["retriever"]})
+    if "error" in chatbot_result:
+        return {"error": chatbot_result["error"]}
+
+    # Get the chatbot function
+    chatbot = chatbot_result["chatbot"]
 
     # Query the chatbot
-    response = chatbot({"query": query})
-    return {"status": "success", "response": response}
+    response = chatbot(query)
+    query_type = "list" if "list" in query.lower() else "paragraph"
+    formatted_response = format_responses(response.get("result", ""), query_type)
+    sources = response.get("sources", [])
+
+    return {
+        "status": "success",
+        "response": formatted_response,
+        "sources": sources
+    }
