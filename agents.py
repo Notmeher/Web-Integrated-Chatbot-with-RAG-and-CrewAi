@@ -1,39 +1,29 @@
 from crewai import Agent
 
-# Agent for fetching website data
-data_scraper = Agent(
-    role='Data Scraper',
-    goal='Scrape data from GenZMarketing website and organize it.',
-    verbose=True,
-    memory=True,
-    tools=[],
-    allow_delegation=False
-)
-
 # Agent for vectorization and storage
 data_vectorizer = Agent(
     role='Data Vectorizer',
-    goal='Vectorize scraped content and store it in a vector database using Ollama embeddings.',
+    goal='Vectorize provided content and store it in a vector database using OpenAI embeddings.',
     verbose=True,
     memory=True,
     tools=[],
     allow_delegation=False
 )
 
-# Agent for retriever design
+# Agent for retriever with refinement
 retriever = Agent(
     role='Retriever Designer',
-    goal='Design a retriever to search vectorized data and return relevant results.',
+    goal='Design a retriever to search vectorized data, refine the top documents, and return combined relevant knowledge.',
     verbose=True,
     memory=True,
     tools=[],
     allow_delegation=False
 )
 
-# Agent for chatbot
+# Agent for chatbot with enhanced correction
 chatbot_agent = Agent(
     role='Chatbot Designer',
-    goal='Implement a chatbot to answer questions based on retrieved content using Ollama LLM.',
+    goal="Implement a chatbot that dynamically adjusts its responses based on the user's query intent, combining and refining multiple knowledge sources if needed.",
     verbose=True,
     memory=True,
     tools=[],
